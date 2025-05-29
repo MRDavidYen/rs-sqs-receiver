@@ -1,0 +1,10 @@
+[package]
+name = "aws-sqs-receiver"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aws-sdk-sqs = "1.71.0"
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
+tokio = { version = "1.45.1", features = ["full"] }
+thiserror = "2.0.12"
