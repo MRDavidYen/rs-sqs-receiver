@@ -1,12 +1,12 @@
 [package]
-name = "aws-sqs-receiver"
+name = "rs-sqs-receiver"
 version = "0.1.0"
 edition = "2024"
 authors = ["David Yen <david99900@gmail.com>"]
 description = "An asynchronous AWS SQS message receiver framework with trait-based handlers and shared resource support"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/MRDavidYen/rs-sqs-receiver"
-documentation = "https://docs.rs/aws-sqs-receiver"
+documentation = "https://docs.rs/rs-sqs-receiver"
 readme = "README.md"
 keywords = ["aws", "sqs", "async", "queue", "messaging"]
 categories = ["asynchronous", "web-programming"]
