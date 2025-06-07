@@ -1,4 +1,4 @@
-use aws_sqs_receiver::{client, errors::AwsSqsReceiverError, receiver};
+use rs_sqs_receiver::{client, errors::AwsSqsReceiverError, receiver};
 use std::env;
 use std::sync::Arc;
 use std::time::Duration;
