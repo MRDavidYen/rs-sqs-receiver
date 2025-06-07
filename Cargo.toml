@@ -1,6 +1,6 @@
 [package]
 name = "rs-sqs-receiver"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["David Yen <david99900@gmail.com>"]
 description = "An asynchronous AWS SQS message receiver framework with trait-based handlers and shared resource support"
