@@ -35,54 +35,21 @@ async fn test_handler(message: String, shared: SharedCounter) -> Result<(), AwsS
 
 #[tokio::test]
 async fn test_sqs_integration() {
-    let queue_name = "test-queue-rust-integration";
+    dotenvy::dotenv().ok();
+
+    let queue_url = env::var("TEST_SQS_QUEUE_URL").expect("TEST_SQS_QUEUE_URL must be set");
 
     let sqs_client = client::create_sqs_client_from_env().await;
-
-    let queue_url = match sqs_client
-        .create_queue()
-        .queue_name(queue_name)
-        .send()
-        .await
-    {
-        Ok(output) => output.queue_url().unwrap().to_string(),
-        Err(e) => {
-            if e.to_string().contains("QueueAlreadyExists") {
-                let queues = sqs_client
-                    .list_queues()
-                    .queue_name_prefix(queue_name)
-                    .send()
-                    .await
-                    .expect("Failed to list queues");
-
-                queues
-                    .queue_urls()
-                    .first()
-                    .expect("Queue should exist but not found")
-                    .clone()
-            } else {
-                panic!("Failed to create/get queue: {}", e);
-            }
-        }
-    };
-
-    println!("Using queue URL: {}", queue_url);
 
     sqs_client
         .send_message()
         .queue_url(&queue_url)
         .message_body("Test message 1")
+        .message_deduplication_id("test-message-1")
+        .message_group_id("test-group")
         .send()
         .await
         .expect("Failed to send test message 1");
-
-    sqs_client
-        .send_message()
-        .queue_url(&queue_url)
-        .message_body("Test message 2")
-        .send()
-        .await
-        .expect("Failed to send test message 2");
 
     println!("Sent 2 test messages to queue");
 
@@ -126,14 +93,6 @@ async fn test_sqs_integration() {
             panic!("Test timed out. Only processed {} messages", final_count);
         }
     }
-
-    let purge_result = sqs_client.purge_queue().queue_url(&queue_url).send().await;
-
-    if let Err(e) = purge_result {
-        println!("Warning: Failed to purge queue: {}", e);
-    }
-
-    println!("Integration test completed successfully");
 }
 
 #[tokio::test]
@@ -181,7 +140,7 @@ async fn test_sqs_receiver_struct_api() {
     let counter_clone = shared_counter.clone();
 
     let mut receiver = receiver::AwsSqsReceiver::new();
-    receiver.add_handler_fn(&queue_url, test_handler, counter_clone);
+    receiver.add_handler_fn(&queue_url, test_handler, counter_clone, None);
 
     let client_clone = sqs_client.clone();
     let receive_task = tokio::spawn(async move { receiver.start_all_handlers(client_clone).await });
@@ -267,6 +226,7 @@ async fn test_aws_sqs_receiver_comprehensive() {
             Ok(())
         },
         counter_clone,
+        None,
     );
 
     // Add simple handler for queue 2
@@ -320,10 +280,11 @@ async fn test_aws_sqs_receiver_with_shutdown() {
         |message: String, shared: SharedCounter| async move {
             println!("Shutdown test handler received: {}", message);
             shared.increment().await;
-            
+
             Ok(())
         },
         counter_clone,
+        None,
     );
 
     // Create shutdown signal

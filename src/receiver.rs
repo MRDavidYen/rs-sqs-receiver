@@ -4,6 +4,9 @@ use functions::AsyncSqsReceiverFunction;
 
 use crate::errors::AwsSqsReceiverError;
 
+mod config;
+pub use config::AwsSqsReceiverConfig;
+
 mod functions;
 
 /// Starts receiving messages from an SQS queue using the provided function.
@@ -62,7 +65,7 @@ pub async fn start_receive_queue<Rfn, TShared, Fut>(
     let queue_url = queue_url.to_string();
 
     // spawn a new task to loop and receive messages from SQS
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         loop {
             let receive_message = sqs_client
                 .receive_message()
@@ -119,6 +122,14 @@ pub async fn start_receive_queue<Rfn, TShared, Fut>(
             }
         }
     });
+
+    // Wait for the task to complete (which should never happen in normal operation)
+    match task.await {
+        Err(e) => {
+            eprintln!("Handler task panicked: {:?}", e);
+        }
+        _ => (),
+    }
 }
 
 /// A struct-based AWS SQS receiver that supports multiple message handlers.
@@ -147,7 +158,7 @@ pub async fn start_receive_queue<Rfn, TShared, Fut>(
 ///     );
 ///
 ///     receiver.add_simple_handler(
-///         "https://sqs.region.amazonaws.com/account/queue2", 
+///         "https://sqs.region.amazonaws.com/account/queue2",
 ///         |message| async move {
 ///             println!("Queue 2: {}", message);
 ///             Ok(())
@@ -199,10 +210,10 @@ impl AwsSqsReceiver {
     /// # Example
     /// ```
     /// use aws_sqs_receiver::receiver::AwsSqsReceiver;
-    /// 
+    ///
     /// let mut receiver = AwsSqsReceiver::new();
     /// let shared_resource = "shared_data".to_string();
-    /// 
+    ///
     /// receiver.add_handler_fn(
     ///     "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
     ///     |message: String, shared: String| async move {
@@ -218,13 +229,20 @@ impl AwsSqsReceiver {
         queue_url: &str,
         handler_fn: Rfn,
         shared_resources: TShared,
+        config: Option<AwsSqsReceiverConfig>,
     ) where
         Rfn: Fn(String, TShared) -> Fut + Send + Sync + Clone + 'static,
         Fut: Future<Output = Result<(), crate::errors::AwsSqsReceiverError>> + Send + 'static,
         TShared: Send + Sync + Clone + 'static,
     {
-        let handler =
+        let mut handler =
             functions::AsyncSqsReceiverFunctionImpl::new(handler_fn, queue_url, shared_resources);
+
+        // If a configuration is provided, apply it to the handler
+        if let Some(cfg) = config {
+            handler = handler.with_config(cfg);
+        }
+
         self.handlers.push(Box::new(handler));
     }
 
@@ -233,7 +251,7 @@ impl AwsSqsReceiver {
     /// # Example
     /// ```
     /// use aws_sqs_receiver::receiver::AwsSqsReceiver;
-    /// 
+    ///
     /// let mut receiver = AwsSqsReceiver::new();
     /// receiver.add_simple_handler(
     ///     "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
@@ -243,14 +261,18 @@ impl AwsSqsReceiver {
     ///     }
     /// );
     /// ```
-    pub fn add_simple_handler<Rfn, Fut>(&mut self, queue_url: &str, handler_fn: Rfn)
-    where
+    pub fn add_simple_handler<Rfn, Fut>(
+        &mut self,
+        queue_url: &str,
+        handler_fn: Rfn,
+        config: Option<AwsSqsReceiverConfig>,
+    ) where
         Rfn: Fn(String) -> Fut + Send + Sync + Clone + 'static,
         Fut: Future<Output = Result<(), crate::errors::AwsSqsReceiverError>> + Send + 'static,
     {
         // Wrap the single-argument closure to match the two-argument trait signature
         let wrapped_fn = move |message: String, _: ()| (handler_fn)(message);
-        self.add_handler_fn(queue_url, wrapped_fn, ());
+        self.add_handler_fn(queue_url, wrapped_fn, (), config);
     }
 
     /// Starts all handlers to receive messages from SQS queues.
@@ -383,6 +405,7 @@ mod tests {
                 Ok(())
             },
             shared_resource,
+            None,
         );
 
         assert_eq!(receiver.handlers.len(), 1);
@@ -396,7 +419,7 @@ mod tests {
         receiver.add_simple_handler("test-queue-url", |message: String| async move {
             println!("Processing message: {}", message);
             Ok(())
-        });
+        }, None);
 
         assert_eq!(receiver.handlers.len(), 1);
     }
@@ -424,6 +447,7 @@ mod tests {
                 Ok(())
             },
             shared_resource1,
+            None,
         );
 
         receiver.add_handler_fn(
@@ -437,13 +461,14 @@ mod tests {
                 Ok(())
             },
             shared_resource2,
+            None,
         );
 
         // Add a simple handler too
         receiver.add_simple_handler("test-queue-3", |message: String| async move {
             println!("Simple handler got: {}", message);
             Ok(())
-        });
+        }, None);
 
         assert_eq!(receiver.handlers.len(), 3);
     }
@@ -457,7 +482,7 @@ mod tests {
             // Mock handler that does nothing for this test
             tokio::time::sleep(Duration::from_millis(1)).await;
             Ok(())
-        });
+        }, None);
 
         assert_eq!(receiver.handlers.len(), 1);
 

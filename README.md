@@ -77,6 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         },
         database_pool,
+        None, // Optional config parameter
     );
 
     // Add simple handler (no shared resources)
@@ -85,7 +86,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         |message: String| async move {
             println!("Sending notification: {}", message);
             Ok(())
-        }
+        },
+        None, // Optional config parameter
     );
 
     // Start all handlers (this consumes the receiver)
@@ -121,6 +123,46 @@ let client = create_sqs_client_with_credentials(
 
 ## Advanced Usage
 
+### Configuration Options
+
+You can customize SQS polling behavior using `AwsSqsReceiverConfig`:
+
+```rust
+use rs_sqs_receiver::{
+    client::create_sqs_client_from_env, 
+    receiver::{AwsSqsReceiver, AwsSqsReceiverConfig}
+};
+
+let mut receiver = AwsSqsReceiver::new();
+
+// Create custom configuration
+let config = AwsSqsReceiverConfig {
+    max_number_of_messages: 5,  // Receive up to 5 messages per poll (default: 10)
+    wait_time_seconds: 15,      // Wait 15 seconds for messages (default: 20)
+};
+
+// Use config with handler
+receiver.add_handler_fn(
+    "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue",
+    |message: String, _: ()| async move {
+        println!("Processing: {}", message);
+        Ok(())
+    },
+    (),
+    Some(config), // Pass the config
+);
+
+// Or use default configuration by passing None
+receiver.add_simple_handler(
+    "https://sqs.us-east-1.amazonaws.com/123456789012/other-queue",
+    |message: String| async move {
+        println!("Processing: {}", message);
+        Ok(())
+    },
+    None, // Use default config (10 messages, 20 second wait)
+);
+```
+
 ### Shared Resources
 
 You can share any type that implements `Send + Sync + Clone + 'static`:
@@ -149,6 +191,7 @@ receiver.add_handler_fn(
         Ok(())
     },
     shared_state,
+    None, // Optional config parameter
 );
 ```
 
@@ -171,6 +214,7 @@ receiver.add_handler_fn(
         }
     },
     (),
+    None, // Optional config parameter
 );
 ```
 
@@ -212,10 +256,16 @@ handler_task.await.expect("Handler task failed");
 
 - `start_receive_queue()`: Functional API for single queue processing
 - `AwsSqsReceiver::new()`: Create a new receiver instance
-- `add_handler_fn()`: Add handler with shared resources
-- `add_simple_handler()`: Add handler without shared resources
+- `add_handler_fn(queue_url, handler_fn, shared_resources, config)`: Add handler with shared resources and optional config
+- `add_simple_handler(queue_url, handler_fn, config)`: Add handler without shared resources, with optional config
 - `start_all_handlers()`: Start all registered handlers
 - `start_all_handlers_with_shutdown()`: Start with graceful shutdown support
+
+### Configuration
+
+- `AwsSqsReceiverConfig`: Configuration struct for customizing SQS polling behavior
+  - `max_number_of_messages`: Maximum messages per poll (1-10, default: 10)
+  - `wait_time_seconds`: Long polling wait time in seconds (0-20, default: 20)
 
 ### Client Creation
 

@@ -1,4 +1,4 @@
-use crate::errors::AwsSqsReceiverError;
+use crate::{errors::AwsSqsReceiverError, receiver::config::AwsSqsReceiverConfig};
 use async_trait::async_trait;
 use std::future::Future;
 
@@ -28,16 +28,17 @@ where
         let resource = self.shared_resources.clone();
         let queue_url = self.queue_url.clone();
         let rv_fn = self.rv_fn.clone();
+        let config = self.receive_config.clone().unwrap_or_default();
 
         loop {
             let receive_message = sqs_client
                 .receive_message()
                 .queue_url(&queue_url)
-                .max_number_of_messages(10)
-                .wait_time_seconds(20)
+                .max_number_of_messages(config.max_number_of_messages)
+                .wait_time_seconds(config.wait_time_seconds)
                 .send()
                 .await;
-            
+
             if receive_message.is_err() {
                 eprintln!("Error receiving messages: {:?}", receive_message.err());
                 continue;
@@ -94,6 +95,7 @@ where
     rv_fn: RFn,
     queue_url: String,
     shared_resources: TShared,
+    receive_config: Option<AwsSqsReceiverConfig>,
 }
 
 impl<RFn, Fut, TShared> AsyncSqsReceiverFunctionImpl<RFn, Fut, TShared>
@@ -118,6 +120,12 @@ where
             rv_fn,
             queue_url: queue_url.to_string(),
             shared_resources,
+            receive_config: None,
         }
+    }
+
+    pub fn with_config(mut self, config: AwsSqsReceiverConfig) -> Self {
+        self.receive_config = Some(config);
+        self
     }
 }
