@@ -1,10 +1,23 @@
 [package]
 name = "aws-sqs-receiver"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+authors = ["David Yen <david99900@gmail.com>"]
+description = "An asynchronous AWS SQS message receiver framework with trait-based handlers and shared resource support"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/MRDavidYen/rs-sqs-receiver"
+documentation = "https://docs.rs/aws-sqs-receiver"
+readme = "README.md"
+keywords = ["aws", "sqs", "async", "queue", "messaging"]
+categories = ["asynchronous", "web-programming"]
 
 [dependencies]
-aws-sdk-sqs = "1.71.0"
+aws-sdk-sqs = "1.72.0"
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 tokio = { version = "1.45.1", features = ["full"] }
 thiserror = "2.0.12"
+async-trait = "0.1.88"
+futures = "0.3.31"
+
+[dev-dependencies]
+dotenvy = "0.15.7"
